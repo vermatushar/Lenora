@@ -206,3 +206,6 @@ Cloudinary, OpenAI, Anthropic, Claude, Cursor, Codex and other product names and
 ## Acknowledgements
 
 Lenora builds on the [MCP Swift SDK](https://github.com/modelcontextprotocol/swift-sdk), [swift-transformers](https://github.com/huggingface/swift-transformers), [MLX Swift](https://github.com/ml-explore/mlx-swift), [Lottie](https://github.com/airbnb/lottie-ios) and [speech-swift](https://github.com/soniqo/speech-swift).
+
+
+Here's to the next generation of video editing!
