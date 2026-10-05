@@ -15,6 +15,7 @@ CONFIG="release"
 MODE="dev"
 ENABLE_ALL_TRAITS=false
 INCLUDE_BUNDLED_SPEECH=false
+INCLUDE_BACKEND_RUNTIME=false
 for arg in "$@"; do
   case "$arg" in
     release|debug) CONFIG="$arg" ;;
@@ -33,6 +34,7 @@ done
 if [ "$CONFIG" = "release" ]; then
   ENABLE_ALL_TRAITS=true
   INCLUDE_BUNDLED_SPEECH=true
+  INCLUDE_BACKEND_RUNTIME=true
 fi
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -59,6 +61,29 @@ APP="$PKG/.build/Lenora.app"
 ZIP="$PKG/.build/Lenora.zip"
 DMG="$PKG/.build/Lenora.dmg"
 
+sign_backend_runtime() {
+  local runtime="$APP/Contents/Resources/Backend" f
+  [ -d "$runtime" ] || return 0
+  echo "==> Signing backend runtime"
+  while IFS= read -r -d '' f; do
+    if file -b "$f" | grep -q 'Mach-O'; then
+      codesign --force --sign "$SIGNING_IDENTITY" "$@" "$f"
+    fi
+  done < <(find "$runtime" -type f \( -name '*.so' -o -name '*.dylib' -o -perm -u+x \) -print0)
+}
+
+make_dmg() {
+  echo "==> Building DMG"
+  rm -f "$DMG"
+  local staging
+  staging="$(mktemp -d)"
+  cp -R "$APP" "$staging/Lenora.app"
+  ln -s /Applications "$staging/Applications"
+  cp "$RESOURCES/AppIcon.icns" "$staging/.VolumeIcon.icns"
+  hdiutil create -volname "Lenora" -srcfolder "$staging" -ov -format UDZO "$DMG"
+  rm -rf "$staging"
+}
+
 BUILD_ARGS=(-c "$CONFIG")
 if $ENABLE_ALL_TRAITS; then
   TRAITS="all"
@@ -82,6 +107,10 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
 cp "$BIN" "$APP/Contents/MacOS/Lenora"
 cp "$RESOURCES/Info.plist" "$APP/Contents/Info.plist"
+if [ -n "${VERSION:-}" ]; then
+  [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "!! VERSION must look like 1.2.3" >&2; exit 1; }
+  /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP/Contents/Info.plist"
+fi
 
 cp "$RESOURCES/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
 
@@ -165,6 +194,11 @@ if $INCLUDE_BUNDLED_SPEECH; then
   cp "$MLX_METALLIB" "$APP/Contents/Resources/mlx-swift_Cmlx.bundle/default.metallib"
 fi
 
+if $INCLUDE_BACKEND_RUNTIME; then
+  echo "==> Building backend runtime"
+  "$ROOT/scripts/build_backend_runtime.sh" "$APP/Contents/Resources/Backend"
+fi
+
 install_name_tool -add_rpath "@executable_path/../Frameworks" "$APP/Contents/MacOS/Lenora"
 touch "$APP"
 
@@ -183,9 +217,15 @@ dsymutil "$APP/Contents/MacOS/Lenora" -o "$DSYM"
 
 if [ "$MODE" = "dev" ]; then
   echo "==> Signing dev app with $SIGNING_IDENTITY"
+  sign_backend_runtime
   codesign --force --deep --sign "$SIGNING_IDENTITY" "$APP"
   codesign --verify --strict --verbose=2 "$APP"
   echo "==> Done: $APP (dev signed)"
+  if [ "$CONFIG" = "release" ]; then
+    "$ROOT/scripts/check_backend_runtime.sh" "$APP/Contents/Resources/Backend"
+    make_dmg
+    echo "   DMG: $DMG"
+  fi
   exit 0
 fi
 
@@ -206,6 +246,8 @@ if [ ! -f "$PROVISION_PROFILE" ]; then
   exit 1
 fi
 cp "$PROVISION_PROFILE" "$APP/Contents/embedded.provisionprofile"
+
+sign_backend_runtime --options runtime --timestamp
 
 echo "==> Codesigning main app"
 codesign --force --options runtime --timestamp \
@@ -232,18 +274,7 @@ echo "==> Stapling ticket to .app"
 xcrun stapler staple "$APP"
 rm -f "$ZIP"
 
-echo "==> Building DMG"
-rm -f "$DMG"
-STAGING="$(mktemp -d)"
-cp -R "$APP" "$STAGING/Lenora.app"
-ln -s /Applications "$STAGING/Applications"
-cp "$RESOURCES/AppIcon.icns" "$STAGING/.VolumeIcon.icns"
-hdiutil create \
-  -volname "Lenora" \
-  -srcfolder "$STAGING" \
-  -ov -format UDZO \
-  "$DMG"
-rm -rf "$STAGING"
+make_dmg
 
 echo "==> Codesigning DMG"
 codesign --force --timestamp --sign "$SIGNING_IDENTITY" "$DMG"
