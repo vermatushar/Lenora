@@ -36,7 +36,8 @@ async def _sweep_hourly(store: ResultStore) -> None:
         await _sweep(store)
 
 
-def create_app(settings: CoreSettings, load_registry: Callable[[httpx.AsyncClient], Registry] = Registry.load) -> FastAPI:
+def create_app(settings: CoreSettings, load_registry: Callable[[httpx.AsyncClient], Registry] = Registry.load,
+               on_ready: Callable[[], None] | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         app.state.results = ResultStore(settings.data_dir / "results")
@@ -47,6 +48,8 @@ def create_app(settings: CoreSettings, load_registry: Callable[[httpx.AsyncClien
             try:
                 registry = app.state.registry = load_registry(http)
                 await registry.start(settings.provider_timeout_seconds)
+                if on_ready is not None:
+                    on_ready()
                 yield
             finally:
                 if registry is not None:
