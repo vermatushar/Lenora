@@ -36,7 +36,13 @@ final class GenerationService {
     private let provider: @MainActor () -> (any GenerationProvider)?
     let catalog: ModelCatalog
     private var tasks: [UUID: Task<Void, Never>] = [:]
-    private(set) var monitoredJobIds: Set<String> = []
+    private struct JobMonitor {
+        let taskId: UUID
+        let onComplete: (@MainActor (MediaAsset) -> Void)?
+        let onFailure: (@MainActor () -> Void)?
+    }
+    private var jobMonitors: [String: JobMonitor] = [:]
+    var monitoredJobIds: Set<String> { Set(jobMonitors.keys) }
     private var submittingKeys: Set<String> = []
     var onCapabilityRefusal: @MainActor () -> Void = { Task { await BackendConnection.shared.refreshCapabilities() } }
 
@@ -48,7 +54,7 @@ final class GenerationService {
     func stopMonitoring() {
         tasks.values.forEach { $0.cancel() }
         tasks.removeAll()
-        monitoredJobIds.removeAll()
+        jobMonitors.removeAll()
         submittingKeys.removeAll()
     }
 
@@ -60,8 +66,7 @@ final class GenerationService {
         code == "provider_unavailable" && !retryable
     }
 
-    private func own(_ operation: @escaping @MainActor () async -> Void) {
-        let id = UUID()
+    private func own(id: UUID = UUID(), _ operation: @escaping @MainActor () async -> Void) {
         tasks[id] = Task { @MainActor [weak self] in
             await operation()
             self?.tasks[id] = nil
@@ -325,24 +330,24 @@ final class GenerationService {
             return (jobId, asset)
         }, by: { $0.0 })
 
-        for (jobId, group) in byJob where !monitoredJobIds.contains(jobId) {
+        for (jobId, group) in byJob {
             let placeholders = group.map(\.1).sorted {
                 ($0.generationInput?.outputIndex ?? 0) < ($1.generationInput?.outputIndex ?? 0)
             }
+            let existing = jobMonitors[jobId]
             if let results = placeholders.lazy.compactMap({ $0.generationInput?.results }).first(where: { !$0.isEmpty }) {
-                monitoredJobIds.insert(jobId)
-                own {
+                guard existing == nil else { continue }
+                track(jobId: jobId, onComplete: nil, onFailure: nil) {
                     await self.finalizeSuccess(
                         results: results, placeholders: placeholders, editor: editor, onComplete: nil, onFailure: nil
                     )
-                    self.monitoredJobIds.remove(jobId)
                 }
-            } else if provider() != nil {
-                own {
-                    await self.monitorJob(
-                        jobId: jobId, placeholders: placeholders, editor: editor, onComplete: nil, onFailure: nil
-                    )
-                }
+            } else {
+                // A running monitor may be polling a backend that has since restarted.
+                monitorJob(
+                    jobId: jobId, placeholders: placeholders, editor: editor,
+                    onComplete: existing?.onComplete, onFailure: existing?.onFailure
+                )
             }
         }
 
@@ -548,7 +553,7 @@ final class GenerationService {
         }
         editor.onProjectCheckpointRequired?()
 
-        await monitorJob(
+        monitorJob(
             jobId: submitted.jobId,
             placeholders: placeholders,
             editor: editor,
@@ -557,18 +562,48 @@ final class GenerationService {
         )
     }
 
+    private func track(
+        jobId: String,
+        onComplete: (@MainActor (MediaAsset) -> Void)?,
+        onFailure: (@MainActor () -> Void)?,
+        _ operation: @escaping @MainActor () async -> Void
+    ) {
+        if let previous = jobMonitors[jobId] { tasks[previous.taskId]?.cancel() }
+        let id = UUID()
+        jobMonitors[jobId] = JobMonitor(taskId: id, onComplete: onComplete, onFailure: onFailure)
+        own(id: id) {
+            await operation()
+            if self.jobMonitors[jobId]?.taskId == id { self.jobMonitors[jobId] = nil }
+        }
+    }
+
     private func monitorJob(
         jobId: String,
         placeholders: [MediaAsset],
         editor: EditorViewModel,
         onComplete: (@MainActor (MediaAsset) -> Void)?,
         onFailure: (@MainActor () -> Void)?
-    ) async {
+    ) {
         guard let provider = provider() else { return }
-        guard monitoredJobIds.insert(jobId).inserted else { return }
-        defer { monitoredJobIds.remove(jobId) }
+        track(jobId: jobId, onComplete: onComplete, onFailure: onFailure) {
+            await self.pollJob(
+                jobId: jobId, provider: provider, placeholders: placeholders, editor: editor,
+                onComplete: onComplete, onFailure: onFailure
+            )
+        }
+    }
+
+    private func pollJob(
+        jobId: String,
+        provider: any GenerationProvider,
+        placeholders: [MediaAsset],
+        editor: EditorViewModel,
+        onComplete: (@MainActor (MediaAsset) -> Void)?,
+        onFailure: (@MainActor () -> Void)?
+    ) async {
         do {
             for try await state in provider.jobUpdates(jobId: jobId) {
+                guard !Task.isCancelled else { return }
                 guard placeholders.contains(where: { editor.mediaAssetsById[$0.id] === $0 }) else { return }
                 switch state.status {
                 case .queued, .running:
@@ -592,7 +627,7 @@ final class GenerationService {
                     return
                 }
             }
-        } catch is CancellationError {
+        } catch where error is CancellationError || Task.isCancelled {
             return
         } catch let error as BackendError where error.isTransient || error == .unauthorized {
             Log.generation.warning("job \(jobId) polling paused: \(error.localizedDescription)")
