@@ -6,7 +6,7 @@ PY="$DIR/python/bin/python3"
 fail() { echo "!! $*" >&2; exit 1; }
 
 [ -x "$PY" ] || fail "missing $PY"
-"$PY" -I -c '
+"$PY" -I -B -c '
 import lenora_backend, lenora_adapter_cloudinary, lenora_adapter_openai
 from importlib.metadata import entry_points
 names = {e.name for e in entry_points(group="lenora.adapters")}
@@ -16,7 +16,7 @@ assert "template" not in names, names
 
 [ -f "$DIR/MANIFEST.json" ] || fail "missing MANIFEST.json"
 [ -f "$DIR/LICENSES/CPython/LICENSE.txt" ] || fail "missing CPython license"
-"$PY" -I - "$DIR/LICENSES" <<'PY' || fail "a bundled distribution has no license text"
+"$PY" -I -B - "$DIR/LICENSES" <<'PY' || fail "a bundled distribution has no license text"
 import sys
 from importlib.metadata import distributions
 from pathlib import Path
@@ -32,11 +32,11 @@ while IFS= read -r -d '' f; do
 done < <(find "$DIR" -type f \( -name '*.so' -o -name '*.dylib' -o -perm -u+x \) -print0)
 
 DATA="$(mktemp -d)"
-trap 'rm -rf "$DATA"; [ -n "${PID:-}" ] && kill "$PID" 2>/dev/null || true' EXIT
+trap 'rm -rf "$DATA" "$DATA.log"; [ -n "${PID:-}" ] && kill "$PID" 2>/dev/null || true' EXIT
 exec 3< <(env -i PATH=/usr/bin:/bin HOME="$DATA" LENORA_ENV=production LENORA_HOST=127.0.0.1 LENORA_PORT=0 \
-  LENORA_DATA_DIR="$DATA" LENORA_TOKEN="$(openssl rand -hex 32)" PYTHONDONTWRITEBYTECODE=1 \
-  "$PY" -I -m lenora_backend 2>/dev/null & echo "PID $!"; wait)
+  LENORA_DATA_DIR="$DATA" LENORA_TOKEN="$(openssl rand -hex 32)" \
+  "$PY" -I -B -m lenora_backend 2>"$DATA.log" & echo "PID $!"; wait)
 read -r -u 3 _ PID
-read -r -t 90 -u 3 LINE || fail "runtime printed no ready line within 90 s"
-[[ "$LINE" =~ ^LENORA_READY\ port=[0-9]{1,5}$ ]] || fail "unexpected first line: $LINE"
+read -r -t 90 -u 3 LINE || { cat "$DATA.log" >&2; fail "runtime printed no ready line within 90 s"; }
+[[ "$LINE" =~ ^LENORA_READY\ port=[0-9]{1,5}$ ]] || { cat "$DATA.log" >&2; fail "unexpected first line: $LINE"; }
 echo "==> Backend runtime OK ($LINE)"

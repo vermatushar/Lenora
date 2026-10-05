@@ -223,6 +223,7 @@ if [ "$MODE" = "dev" ]; then
   echo "==> Done: $APP (dev signed)"
   if [ "$CONFIG" = "release" ]; then
     "$ROOT/scripts/check_backend_runtime.sh" "$APP/Contents/Resources/Backend"
+    codesign --verify --deep --strict "$APP"
     make_dmg
     echo "   DMG: $DMG"
   fi
@@ -255,6 +256,10 @@ codesign --force --options runtime --timestamp \
   --sign "$SIGNING_IDENTITY" \
   "$APP"
 codesign --verify --strict --verbose=2 "$APP"
+if $INCLUDE_BACKEND_RUNTIME; then
+  "$ROOT/scripts/check_backend_runtime.sh" "$APP/Contents/Resources/Backend"
+  codesign --verify --deep --strict "$APP"
+fi
 
 if [ "$MODE" = "sign" ]; then
   echo "==> Done: $APP (signed, not notarized)"
