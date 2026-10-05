@@ -1,5 +1,7 @@
 import asyncio
 import logging
+import os
+import signal
 from collections.abc import Callable
 from contextlib import asynccontextmanager, suppress
 
@@ -10,6 +12,7 @@ from lenora_backend import __version__
 from lenora_backend.auth import require_token
 from lenora_backend.errors import install_error_handlers
 from lenora_backend.idempotency import IdempotencyStore
+from lenora_backend.parent import watch_parent
 from lenora_backend.registry import Registry
 from lenora_backend.results import ResultStore
 from lenora_backend.routes import assets, capabilities, health, jobs, results, uploads
@@ -48,9 +51,19 @@ def create_app(settings: CoreSettings, load_registry: Callable[[httpx.AsyncClien
             try:
                 registry = app.state.registry = load_registry(http)
                 await registry.start(settings.provider_timeout_seconds)
+                watcher = None
+                if settings.parent_pid is not None:
+                    watcher = asyncio.create_task(
+                        watch_parent(settings.parent_pid, lambda: os.kill(os.getpid(), signal.SIGTERM)))
                 if on_ready is not None:
                     on_ready()
-                yield
+                try:
+                    yield
+                finally:
+                    if watcher is not None:
+                        watcher.cancel()
+                        with suppress(asyncio.CancelledError):
+                            await watcher
             finally:
                 if registry is not None:
                     await registry.stop(settings.provider_timeout_seconds)

@@ -60,3 +60,16 @@ def test_second_backend_on_same_data_dir_exits_with_code_3(spawn, tmp_path):
 def test_backends_on_different_data_dirs_both_run(spawn, tmp_path):
     a, b = spawn(tmp_path / "a"), spawn(tmp_path / "b")
     assert READY.match(read_line(a)) and READY.match(read_line(b))
+
+
+def test_backend_exits_when_parent_pid_is_not_its_parent(spawn):
+    proc = spawn(LENORA_PARENT_PID="999999")
+    assert proc.wait(timeout=30) is not None
+
+
+def test_backend_keeps_running_while_its_parent_lives(spawn):
+    proc = spawn(LENORA_PARENT_PID=str(os.getpid()))
+    match = READY.match(read_line(proc))
+    assert match
+    response = httpx.get(f"http://127.0.0.1:{match.group(1)}/v1/health", timeout=10)
+    assert response.status_code == 200 and proc.poll() is None

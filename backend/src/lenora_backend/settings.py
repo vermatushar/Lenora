@@ -19,6 +19,8 @@ class CoreSettings(BaseSettings):
     data_dir: Path = Path(".data")
     # Proxies whose X-Forwarded-Proto uvicorn trusts in production; result URLs use the client-facing scheme.
     forwarded_allow_ips: str | None = None
+    # Set by the app for its built-in backend; the backend exits when that process is gone.
+    parent_pid: int | None = Field(default=None, gt=1)
 
     @property
     def bind_host(self) -> str:
