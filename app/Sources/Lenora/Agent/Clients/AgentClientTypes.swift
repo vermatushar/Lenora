@@ -22,6 +22,8 @@ enum AgentProvider: String, CaseIterable, Sendable {
         }
     }
 
+    var keychainAccount: String { credentialStorage.account }
+
     fileprivate var storedAPIKey: String {
         let store = CredentialStore.current
         #if DEBUG
