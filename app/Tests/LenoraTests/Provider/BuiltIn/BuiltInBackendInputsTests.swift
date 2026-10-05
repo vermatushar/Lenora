@@ -42,6 +42,19 @@ struct BuiltInBackendInputsTests {
             == ProviderKeys(cloudinaryCloudName: "c", cloudinaryAPIKey: "1", cloudinaryAPISecret: "s", openAIAPIKey: "sk-test"))
     }
 
+    @Test(arguments: [ProviderKeys.Account.cloudinaryCloudName, ProviderKeys.Account.cloudinaryAPIKey,
+                      ProviderKeys.Account.cloudinaryAPISecret])
+    func failedCloudinarySaveLeavesNoPartialCredentials(failingAccount: String) {
+        let memory = CredentialStore.memory()
+        _ = CloudinaryCredentials(cloudName: "old", apiKey: "0", apiSecret: "old").save(to: memory)
+        let store = CredentialStore(
+            read: memory.read,
+            save: { value, account in account != failingAccount && memory.save(value, account) },
+            delete: memory.delete, environment: [:], isLoginKeychain: false)
+        #expect(!CloudinaryCredentials(cloudName: "c", apiKey: "1", apiSecret: "s").save(to: store))
+        #expect(ProviderKeys.load(from: memory) == ProviderKeys())
+    }
+
     @Test func environmentContainsOnlyTheAllowlist() {
         let env = BuiltInBackendEnvironment.make(
             keys: ProviderKeys(cloudinaryCloudName: "c", cloudinaryAPIKey: "1", cloudinaryAPISecret: "s", openAIAPIKey: "sk"),

@@ -42,6 +42,9 @@
 "AI Enhance" = "AI Enhance";
 "AI Generated" = "AI Generated";
 "AI agent" = "AI agent";
+"API Keys" = "API Keys";
+"API key" = "API key";
+"API secret" = "API secret";
 "About Lenora" = "About Lenora";
 "Action Safe" = "Action Safe";
 "Adapters" = "Adapters";
@@ -68,6 +71,8 @@
 "Add to Queue" = "Add to Queue";
 "Add to chat" = "Add to chat";
 "Add video to the timeline, then mark a range to score only part of it." = "Add video to the timeline, then mark a range to score only part of it.";
+"Add your Cloudinary keys in Settings → API Keys." = "Add your Cloudinary keys in Settings → API Keys.";
+"Add your OpenAI key in Settings → API Keys." = "Add your OpenAI key in Settings → API Keys.";
 "Added to %@" = "Added to %@";
 "Adjust" = "Adjust";
 "Adjust Range" = "Adjust Range";
@@ -84,6 +89,8 @@
 "Angle" = "Angle";
 "Animate" = "Animate";
 "Animation" = "Animation";
+"Another copy of Lenora is using the built-in backend." = "Another copy of Lenora is using the built-in backend.";
+"Anthropic" = "Anthropic";
 "Anthropic API Key" = "Anthropic API Key";
 "Anyone with the link can watch." = "Anyone with the link can watch.";
 "Appearance" = "Appearance";
@@ -111,6 +118,7 @@
 "Bold" = "Bold";
 "Both" = "Both";
 "Bottom" = "Bottom";
+"Built-in" = "Built-in";
 "Bundled" = "Bundled";
 "Bundled Skills Unavailable" = "Bundled Skills Unavailable";
 "Bundled skills are missing from this build." = "Bundled skills are missing from this build.";
@@ -186,6 +194,9 @@
 "Close Other Tabs" = "Close Other Tabs";
 "Close Tab" = "Close Tab";
 "Close gaps" = "Close gaps";
+"Cloud name" = "Cloud name";
+"Cloudinary" = "Cloudinary";
+"Cloudinary API Keys" = "Cloudinary API Keys";
 "Codec" = "Codec";
 "Collapse" = "Collapse";
 "Color" = "Color";
@@ -227,6 +238,7 @@
 "Couldn't improve the prompt: %@" = "Couldn't improve the prompt: %@";
 "Couldn't reach the provider to upload the file." = "Couldn't reach the provider to upload the file.";
 "Couldn't save the token to the Keychain." = "Couldn't save the token to the Keychain.";
+"Couldn't save to the Keychain." = "Couldn't save to the Keychain.";
 "Couldn't switch angle." = "Couldn't switch angle.";
 "Couldn’t move %@ to the Trash." = "Couldn’t move %@ to the Trash.";
 "Count" = "Count";
@@ -243,6 +255,7 @@
 "Crop to a new aspect ratio, keeping the subject in frame" = "Crop to a new aspect ratio, keeping the subject in frame";
 "Curves" = "Curves";
 "Custom Aspect Ratio" = "Custom Aspect Ratio";
+"Custom URL" = "Custom URL";
 "Custom…" = "Custom…";
 "Cut" = "Cut";
 "Cut out the subject as a transparent PNG" = "Cut out the subject as a transparent PNG";
@@ -411,11 +424,13 @@
 "Generation failed." = "Generation failed.";
 "Generation in progress" = "Generation in progress";
 "Generation panel" = "Generation panel";
+"Generation runs in a backend built into Lenora. Add provider keys in API Keys." = "Generation runs in a backend built into Lenora. Add provider keys in API Keys.";
 "Generation runs on your Lenora backend. The token is stored in the macOS Keychain." = "Generation runs on your Lenora backend. The token is stored in the macOS Keychain.";
 "Generative Fill" = "Generative Fill";
 "Get Anthropic API key" = "Get Anthropic API key";
 "Get OpenAI API key" = "Get OpenAI API key";
 "Get Started" = "Get Started";
+"Get a key" = "Get a key";
 "Get a notification when a generation finishes." = "Get a notification when a generation finishes.";
 "Getting the search model ready." = "Getting the search model ready.";
 "Glow" = "Glow";
@@ -477,6 +492,7 @@
 "Keeps this much audio before and after detected speech." = "Keeps this much audio before and after detected speech.";
 "Keyboard Shortcuts" = "Keyboard Shortcuts";
 "Keyframes" = "Keyframes";
+"Keys are stored in the macOS Keychain and sent only to the provider that issued them." = "Keys are stored in the macOS Keychain and sent only to the provider that issued them.";
 "LUTs" = "LUTs";
 "Language" = "Language";
 "Language for the editor UI" = "Language for the editor UI";
@@ -514,6 +530,7 @@
 "Loading source frame rate…" = "Loading source frame rate…";
 "Loading video metadata…" = "Loading video metadata…";
 "Local" = "Local";
+"Log" = "Log";
 "Low" = "Low";
 "Luma" = "Luma";
 "Luminosity" = "Luminosity";
@@ -634,6 +651,7 @@
 "Open Skills to browse bundled playbooks, create your own, or add them to other agents." = "Open Skills to browse bundled playbooks, create your own, or add them to other agents.";
 "Open Timeline" = "Open Timeline";
 "Open the AI Edit tab to upscale, prompt-edit, create video from a frame, or generate music, SFX, cleanup, and dubbing from the clip." = "Open the AI Edit tab to upscale, prompt-edit, create video from a frame, or generate music, SFX, cleanup, and dubbing from the clip.";
+"OpenAI" = "OpenAI";
 "OpenAI API Key" = "OpenAI API Key";
 "Open…" = "Open…";
 "Organize with Agent" = "Organize with Agent";
@@ -646,6 +664,7 @@
 "Overline" = "Overline";
 "Padding" = "Padding";
 "Paste" = "Paste";
+"Paste API environment variable" = "Paste API environment variable";
 "Paste Clip Settings" = "Paste Clip Settings";
 "Paste LENORA_TOKEN" = "Paste LENORA_TOKEN";
 "Paste Settings" = "Paste Settings";
@@ -750,6 +769,7 @@
 "Resolution must be at least 2 × 2 pixels." = "Resolution must be at least 2 × 2 pixels.";
 "Resolution must not exceed 8192 pixels on either edge." = "Resolution must not exceed 8192 pixels on either edge.";
 "Resolved" = "Resolved";
+"Restart" = "Restart";
 "Restart Lenora" = "Restart Lenora";
 "Restore" = "Restore";
 "Retry" = "Retry";
@@ -766,6 +786,7 @@
 "Rotation" = "Rotation";
 "Roundness" = "Roundness";
 "Running on" = "Running on";
+"Running on this Mac" = "Running on this Mac";
 "Safe Zones" = "Safe Zones";
 "Sample Key Color" = "Sample Key Color";
 "Sample key color" = "Sample key color";
@@ -778,6 +799,7 @@
 "Save Range as Media" = "Save Range as Media";
 "Save as Audio" = "Save as Audio";
 "Save as Media" = "Save as Media";
+"Saved." = "Saved.";
 "Saves a copy of this project with all media bundled inside, so it opens on any machine." = "Saves a copy of this project with all media bundled inside, so it opens on any machine.";
 "Scale" = "Scale";
 "Scope (2.39:1)" = "Scope (2.39:1)";
@@ -854,6 +876,7 @@
 "Square (1:1)" = "Square (1:1)";
 "Start creating" = "Start creating";
 "Start creating, or explore these to get the most out of Lenora." = "Start creating, or explore these to get the most out of Lenora.";
+"Starting…" = "Starting…";
 "Starts %@s into the group's clock; matched the master with %@%% confidence." = "Starts %@s into the group's clock; matched the master with %@%% confidence.";
 "Status Filter" = "Status Filter";
 "Status: %@" = "Status: %@";
@@ -897,12 +920,18 @@
 "Text to Music" = "Text to Music";
 "Text to speak" = "Text to speak";
 "Text to speak (minimum %lld characters)" = "Text to speak (minimum %lld characters)";
+"That isn't a Cloudinary API environment variable. Copy it from Cloudinary Console → Settings → API Keys." = "That isn't a Cloudinary API environment variable. Copy it from Cloudinary Console → Settings → API Keys.";
 "The MCP server could not start. Check the port, then try again." = "The MCP server could not start. Check the port, then try again.";
 "The MCP token is unavailable. Check Keychain access, then try again." = "The MCP token is unavailable. Check Keychain access, then try again.";
+"The agent uses your Anthropic or OpenAI key from Settings → API Keys." = "The agent uses your Anthropic or OpenAI key from Settings → API Keys.";
 "The backend rejected the token." = "The backend rejected the token.";
 "The backend restarted. Generate again." = "The backend restarted. Generate again.";
 "The backend returned an unexpected response." = "The backend returned an unexpected response.";
 "The backend returned no result for this output." = "The backend returned no result for this output.";
+"The built-in backend didn't start in time." = "The built-in backend didn't start in time.";
+"The built-in backend quit (code %lld)." = "The built-in backend quit (code %lld).";
+"The built-in backend rejected its settings." = "The built-in backend rejected its settings.";
+"The built-in backend stopped responding." = "The built-in backend stopped responding.";
 "The clip you're adding has different settings than the current project." = "The clip you're adding has different settings than the current project.";
 "The connected backend doesn't offer this edit. Open Settings → Backend." = "The connected backend doesn't offer this edit. Open Settings → Backend.";
 "The export" = "The export";
@@ -923,6 +952,7 @@
 "The upload didn't finish. Publish the export again." = "The upload didn't finish. Publish the export again.";
 "The upload to the provider failed." = "The upload to the provider failed.";
 "Theme" = "Theme";
+"This build doesn't include the built-in backend. Run ./scripts/dev or choose Custom URL." = "This build doesn't include the built-in backend. Run ./scripts/dev or choose Custom URL.";
 "This build includes no skills." = "This build includes no skills.";
 "This edit works on images only." = "This edit works on images only.";
 "This edit works on videos only." = "This edit works on videos only.";
@@ -1006,7 +1036,9 @@
 "Use as first frame or reference" = "Use as first frame or reference";
 "Use for non-English or mixed-language audio." = "Use for non-English or mixed-language audio.";
 "Use trimmed portion only" = "Use trimmed portion only";
-"Use your own API key for AI chat. Stored in the macOS Keychain." = "Use your own API key for AI chat. Stored in the macOS Keychain.";
+"Used by the built-in backend for Cloudinary features." = "Used by the built-in backend for Cloudinary features.";
+"Used by the in-app agent on Claude models." = "Used by the in-app agent on Claude models.";
+"Used by the in-app agent on OpenAI models, voiceover and Improve Prompt." = "Used by the in-app agent on OpenAI models, voiceover and Improve Prompt.";
 "Uses selected clips when available, otherwise all captionable audio. Choose a track to limit captions." = "Uses selected clips when available, otherwise all captionable audio. Choose a track to limit captions.";
 "Uses the whole timeline by default. Mark a range on the timeline to score only that span." = "Uses the whole timeline by default. Mark a range on the timeline to score only that span.";
 "Version" = "Version";

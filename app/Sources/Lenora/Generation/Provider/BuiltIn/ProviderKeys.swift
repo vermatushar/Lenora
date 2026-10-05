@@ -36,10 +36,11 @@ struct CloudinaryCredentials: Sendable, Equatable {
         return CloudinaryCredentials(cloudName: String(match.3), apiKey: String(match.1), apiSecret: String(match.2))
     }
 
-    /// Writes the Keychain synchronously; call off the main actor.
+    /// Writes the Keychain synchronously; call off the main actor. A failed write removes all three accounts.
     func save(to store: CredentialStore) -> Bool {
-        store.save(cloudName, ProviderKeys.Account.cloudinaryCloudName)
-            && store.save(apiKey, ProviderKeys.Account.cloudinaryAPIKey)
-            && store.save(apiSecret, ProviderKeys.Account.cloudinaryAPISecret)
+        let accounts = [ProviderKeys.Account.cloudinaryCloudName, ProviderKeys.Account.cloudinaryAPIKey, ProviderKeys.Account.cloudinaryAPISecret]
+        if zip([cloudName, apiKey, apiSecret], accounts).allSatisfy({ store.save($0, $1) }) { return true }
+        accounts.forEach(store.delete)
+        return false
     }
 }
