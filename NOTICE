@@ -24,3 +24,9 @@ Converted from Beat This (https://github.com/CPJKU/beat_this).
 Copyright (c) 2024 Institute of Computational Perception, JKU Linz, Austria
 Licensed under the MIT License (full text in
 app/Sources/Lenora/Resources/Models/BeatThis-LICENSE.txt, shipped in the app's Models/).
+
+Bundled backend runtime
+-----------------------
+Release builds of Lenora.app include, in Contents/Resources/Backend, the Lenora backend (Apache-2.0),
+CPython 3.12 (Python Software Foundation License) and the Python packages listed in
+Contents/Resources/Backend/MANIFEST.json. Their license texts are in Contents/Resources/Backend/LICENSES.

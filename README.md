@@ -21,7 +21,28 @@ Lenora is a native macOS editor written in Swift 6.2 with SwiftUI, AppKit, AVFou
 
 It is for editors who want an AI agent to work on the real timeline (cutting, captioning, grading, generating shots) with every change undoable, and for developers who want to host their own generation backend or add a provider to it.
 
-Lenora is distributed as source. Build it yourself with the steps below.
+Download the app as described below, or build it from source.
+
+## Download and run
+
+Requirements: a Mac with Apple silicon on macOS 26, and a free [Cloudinary](https://cloudinary.com/users/register_free) account. An OpenAI key (voiceover, Improve Prompt, agent) and an Anthropic key (agent on Claude) are optional.
+
+1. Download `Lenora.dmg` from the [latest release](https://github.com/vermatushar/Lenora/releases/latest), open it, and drag **Lenora** to **Applications**. Launch it from Applications.
+2. The app is not notarized, so macOS blocks the first launch. Open **System Settings → Privacy & Security**, scroll to Security, and choose **Open Anyway** next to Lenora.
+3. Open **Lenora → Settings → API Keys**. In Cloudinary Console → **Settings → API Keys**, copy the **API environment variable** (`cloudinary://…`), paste it into **Paste API environment variable**, choose **Fill**, then **Save**. Add OpenAI or Anthropic keys if you have them.
+4. **Settings → Backend** should say **Running on this Mac**, and list the `cloudinary` adapter as **Enabled**.
+
+Lenora uses your own keys (bring your own key): requests go from your Mac to Cloudinary and OpenAI, and their usage is billed to your accounts. Keys are stored in the macOS Keychain.
+
+| Key | Unlocks |
+|---|---|
+| Cloudinary | Background removal, generative fill and edits, upscaling, reframing, publish and share links |
+| OpenAI | Voiceover, Improve Prompt, the in-app agent on OpenAI models |
+| Anthropic | The in-app agent on Claude models |
+
+Editing, playback, transcription, beat detection and footage search work without any key.
+
+**Troubleshooting:** Saving a key restarts the built-in backend. If it fails to start, Settings → Backend shows why, with its **Log** and a **Restart** button. If macOS still refuses to open the app, run `xattr -dr com.apple.quarantine /Applications/Lenora.app` in Terminal.
 
 ## Features
 
@@ -35,7 +56,7 @@ Lenora is distributed as source. Build it yourself with the steps below.
 - Export to H.264, H.265, ProRes and HEVC 10-bit HDR, or hand off the timeline as FCPXML or XMEML (Final Cut Pro 7 XML, for Premiere Pro).
 
 ### Agent
-- **In-app agent.** Chat with Claude or GPT models using your own Anthropic or OpenAI API key (Settings → Agent → AI Chat). Keys are stored in the macOS Keychain and requests go straight to the provider's API.
+- **In-app agent.** Chat with Claude or GPT models using your own Anthropic or OpenAI API key (Settings → API Keys). Keys are stored in the macOS Keychain and requests go straight to the provider's API.
 - **One tool set.** The in-app agent and external MCP clients call the same tools (timeline reads, clip edits, multicam, transcript cuts, captions, color, effects, export, search, generation and publishing) through the same editor operations as the UI, and agent edits land in the same undo history as yours.
 - **MCP server.** A Streamable HTTP MCP server bound to `127.0.0.1` (port 19789 by default) and protected by a bearer token. **Settings → Agent → Connect an agent** shows the token and a setup snippet for Claude Code, Cursor, Codex and Claude Desktop. Claude Desktop installs Lenora as an extension built from [`mcpb/`](mcpb/).
 - **Skills.** 14 bundled [agent skills](app/Sources/Lenora/Resources/Skills/) for workflows such as color grading, multicam editing, captions and UGC ads. Settings → Skills installs them to `~/.lenora/skills/`, and the agent can save a timeline's approach as a new skill.
@@ -84,7 +105,7 @@ flowchart LR
 | You chat with the in-app agent | Messages, tool results and frames the agent inspects | Anthropic or OpenAI, with your key |
 | You first use footage search | A download request only | Hugging Face |
 
-Editing, transcription, beat detection, search indexing and export stay local. The MCP server accepts only local connections. Provider keys live in the backend's environment (`.env` in development); the backend token, MCP token and chat keys live in the macOS Keychain. Published links are public to anyone who has them.
+Editing, transcription, beat detection, search indexing and export stay local. The MCP server accepts only local connections. Provider keys live in the macOS Keychain for the built-in backend, or in a self-hosted backend's environment (`.env` in development); the backend token, MCP token and chat keys live in the macOS Keychain. Published links are public to anyone who has them.
 
 ## Requirements
 
@@ -126,13 +147,15 @@ From the repository root, `scripts/bundle.sh debug --fast` assembles an ad-hoc s
 
 ### Run the backend on its own
 
+For development and self-hosting, run the backend yourself and point the app at it with **Settings → Backend → Custom URL**.
+
 ```bash
 cd backend
 uv sync
 uv run lenora-backend          # reads ../.env in development
 ```
 
-Then open **Settings → Backend** in Lenora, enter the URL and paste `LENORA_TOKEN`, and choose **Test Connection**. Remote backends must use HTTPS.
+Then open **Settings → Backend** in Lenora, choose **Custom URL**, enter the URL and paste `LENORA_TOKEN`, and choose **Test Connection**. Remote backends must use HTTPS.
 
 ### Run the backend in Docker
 
