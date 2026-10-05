@@ -63,3 +63,17 @@ def test_data_dir_and_proxy_trust_come_from_the_environment(monkeypatch, tmp_pat
     monkeypatch.setenv("LENORA_DATA_DIR", str(tmp_path))
     monkeypatch.setenv("LENORA_FORWARDED_ALLOW_IPS", "10.0.0.1")
     assert (CoreSettings().data_dir, CoreSettings().forwarded_allow_ips) == (tmp_path, "10.0.0.1")
+
+
+def test_port_zero_is_allowed(monkeypatch):
+    monkeypatch.setenv("LENORA_TOKEN", "x" * 43)
+    monkeypatch.setenv("LENORA_PORT", "0")
+    assert CoreSettings().bind_port == 0
+
+
+@pytest.mark.parametrize("port", ["-1", "65536"])
+def test_out_of_range_port_is_rejected(monkeypatch, port):
+    monkeypatch.setenv("LENORA_TOKEN", "x" * 43)
+    monkeypatch.setenv("LENORA_PORT", port)
+    with pytest.raises(ValidationError):
+        CoreSettings()

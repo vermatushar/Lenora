@@ -45,6 +45,7 @@ struct BackendConnectionTests {
         let suite = "BackendConnectionTests.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(BackendMode.custom.rawValue, forKey: BackendMode.defaultsKey)
         try await body(defaults)
     }
 
@@ -120,5 +121,19 @@ struct BackendConnectionTests {
             await refresh.value
             #expect(catalog.backendModels.isEmpty)
         }
+    }
+
+    @Test func builtInModeConnectsToTheSupervisorConfiguration() async throws {
+        let suite = "BackendConnectionTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let builtIn = LenoraBackendConfiguration(baseURL: try #require(URL(string: "http://127.0.0.1:54817")), token: "tok")
+        var made: [LenoraBackendConfiguration] = []
+        let connection = BackendConnection(catalog: ModelCatalog(), environment: [:], defaults: defaults, loadToken: { nil },
+                                           makeProvider: { made.append($0); return FakeProvider() },
+                                           builtInConfiguration: { builtIn })
+        await connection.reload()
+        #expect(made == [builtIn])
+        #expect(connection.state == .connected)
     }
 }

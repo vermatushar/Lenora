@@ -1,9 +1,11 @@
 import SwiftUI
 
 struct BackendPane: View {
+    private static let clearQuarantineCommand = "xattr -dr com.apple.quarantine /Applications/Lenora.app"
     private let connection = BackendConnection.shared
     @State private var urlText = ""
     @State private var tokenText = ""
+    @State private var mode = BackendMode.effective(environment: ProcessInfo.processInfo.environment, defaults: .standard)
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.xxl) {
@@ -19,47 +21,121 @@ struct BackendPane: View {
         .onAppear {
             urlText = UserDefaults.standard.string(forKey: LenoraBackendConfiguration.urlDefaultsKey) ?? ""
         }
+        .onChange(of: mode) { BuiltInBackend.shared.select($1) }
+    }
+
+    private var modePicker: some View {
+        Picker(String(), selection: $mode) {
+            Text(L10n.string("Built-in")).tag(BackendMode.builtIn)
+            Text(L10n.string("Custom URL")).tag(BackendMode.custom)
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .fixedSize()
+        .disabled(connection.urlFromEnvironment)
+    }
+
+    @ViewBuilder private var builtInSection: some View {
+        switch BuiltInBackend.shared.state {
+        case .stopped, .starting:
+            HStack(spacing: AppTheme.Spacing.sm) {
+                ProgressView().controlSize(.small)
+                status(L10n.string("Starting…"), color: AppTheme.Text.secondaryColor)
+            }
+            .font(.system(size: AppTheme.FontSize.sm))
+        case .running:
+            status(L10n.string("Running on this Mac"), color: AppTheme.Status.successColor)
+                .font(.system(size: AppTheme.FontSize.sm))
+        case .notIncluded:
+            status(L10n.string("This build doesn't include the built-in backend. Run ./scripts/dev or choose Custom URL."), color: AppTheme.Text.secondaryColor)
+                .font(.system(size: AppTheme.FontSize.sm))
+        case .failed(let failure, let log):
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+                HStack(spacing: AppTheme.Spacing.md) {
+                    Button(L10n.string("Restart")) { BuiltInBackend.shared.restart() }
+                        .buttonStyle(.capsule(.prominent, size: .regular))
+                        .controlSize(.large)
+                    status(failureMessage(failure), color: AppTheme.Status.errorColor)
+                }
+                if failure == .quarantined {
+                    Text(verbatim: Self.clearQuarantineCommand)
+                        .font(.system(size: AppTheme.FontSize.sm, design: .monospaced))
+                        .foregroundStyle(AppTheme.Text.primaryColor)
+                        .textSelection(.enabled)
+                }
+                DisclosureGroup(L10n.string("Log")) {
+                    Text(verbatim: log.joined(separator: "\n"))
+                        .font(.system(size: AppTheme.FontSize.xs, design: .monospaced))
+                        .foregroundStyle(AppTheme.Text.secondaryColor)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .font(.system(size: AppTheme.FontSize.sm))
+        }
+    }
+
+    private func failureMessage(_ failure: BuiltInBackendFailure) -> String {
+        switch failure {
+        case .timeout: L10n.string("The built-in backend didn't start in time.")
+        case .protocolViolation, .internal: L10n.string("The built-in backend stopped responding.")
+        case .alreadyRunning: L10n.string("Another copy of Lenora is using the built-in backend.")
+        case .configuration: L10n.string("The built-in backend rejected its settings.")
+        case .quarantined: L10n.string("macOS blocked the built-in backend. In Terminal, run \(Self.clearQuarantineCommand), then choose Restart.")
+        case .crashed(let code): L10n.string("The built-in backend quit (code \(Int(code))).")
+        }
     }
 
     private var connectionSection: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.xl) {
-            Text(L10n.string("Generation runs on your Lenora backend. The token is stored in the macOS Keychain."))
+            modePicker
+            Text(verbatim: mode == .builtIn
+                ? L10n.string("Generation runs in a backend built into Lenora. Add provider keys in API Keys.")
+                : L10n.string("Generation runs on your Lenora backend. The token is stored in the macOS Keychain."))
                 .font(.system(size: AppTheme.FontSize.sm))
                 .foregroundStyle(AppTheme.Text.tertiaryColor)
                 .fixedSize(horizontal: false, vertical: true)
-            fieldGroup(title: L10n.string("URL")) {
-                if connection.urlFromEnvironment {
-                    textField(.constant(connection.configuration?.baseURL.absoluteString ?? ""), prompt: "")
-                        .disabled(true)
-                    Text(L10n.string("Set by LENORA_BACKEND_URL for this launch."))
-                        .font(.system(size: AppTheme.FontSize.sm))
-                        .foregroundStyle(AppTheme.Text.tertiaryColor)
-                } else {
-                    textField($urlText, prompt: LenoraBackendConfiguration.defaultURL)
-                }
+            if mode == .builtIn {
+                builtInSection
+            } else {
+                customSection
             }
-            fieldGroup(title: L10n.string("Token")) {
-                if connection.tokenFromEnvironment {
-                    SecureField(String(), text: .constant(""), prompt: Text(L10n.string("Unchanged")))
-                        .textFieldStyle(.plain)
-                        .fieldChrome()
-                        .disabled(true)
-                    Text(L10n.string("Set by LENORA_TOKEN for this launch."))
-                        .font(.system(size: AppTheme.FontSize.sm))
-                        .foregroundStyle(AppTheme.Text.tertiaryColor)
-                } else {
-                    SecureField(tokenPrompt, text: $tokenText)
-                        .textFieldStyle(.plain)
-                        .fieldChrome()
-                }
+        }
+    }
+
+    @ViewBuilder private var customSection: some View {
+        fieldGroup(title: L10n.string("URL")) {
+            if connection.urlFromEnvironment {
+                textField(.constant(connection.configuration?.baseURL.absoluteString ?? ""), prompt: "")
+                    .disabled(true)
+                Text(L10n.string("Set by LENORA_BACKEND_URL for this launch."))
+                    .font(.system(size: AppTheme.FontSize.sm))
+                    .foregroundStyle(AppTheme.Text.tertiaryColor)
+            } else {
+                textField($urlText, prompt: LenoraBackendConfiguration.defaultURL)
             }
-            HStack(spacing: AppTheme.Spacing.md) {
-                Button(L10n.string("Test Connection"), action: testConnection)
-                    .buttonStyle(.capsule(.prominent, size: .regular))
-                    .controlSize(.large)
-                    .disabled(connection.state == .connecting)
-                statusLabel
+        }
+        fieldGroup(title: L10n.string("Token")) {
+            if connection.tokenFromEnvironment {
+                SecureField(String(), text: .constant(""), prompt: Text(L10n.string("Unchanged")))
+                    .textFieldStyle(.plain)
+                    .fieldChrome()
+                    .disabled(true)
+                Text(L10n.string("Set by LENORA_TOKEN for this launch."))
+                    .font(.system(size: AppTheme.FontSize.sm))
+                    .foregroundStyle(AppTheme.Text.tertiaryColor)
+            } else {
+                SecureField(tokenPrompt, text: $tokenText)
+                    .textFieldStyle(.plain)
+                    .fieldChrome()
             }
+        }
+        HStack(spacing: AppTheme.Spacing.md) {
+            Button(L10n.string("Test Connection"), action: testConnection)
+                .buttonStyle(.capsule(.prominent, size: .regular))
+                .controlSize(.large)
+                .disabled(connection.state == .connecting)
+            statusLabel
         }
     }
 
@@ -78,7 +154,7 @@ struct BackendPane: View {
                         Text(L10n.string("Enabled"))
                             .foregroundStyle(AppTheme.Status.successColor)
                     } else {
-                        Text(verbatim: adapter.reason ?? "")
+                        Text(verbatim: disabledReason(adapter))
                             .foregroundStyle(AppTheme.Text.tertiaryColor)
                     }
                 }
@@ -88,6 +164,12 @@ struct BackendPane: View {
                 }
             }
         }
+    }
+
+    private func disabledReason(_ adapter: AdapterHealth) -> String {
+        let raw = adapter.reason ?? ""
+        guard mode == .builtIn else { return raw }
+        return MissingProviderKeys.message(adapterID: adapter.id, reason: adapter.reason) ?? raw
     }
 
     @ViewBuilder private func detailRows(_ details: AdapterHealthDetails) -> some View {
@@ -158,6 +240,8 @@ struct BackendPane: View {
                 status(L10n.string("\(url) is not a valid URL."), color: AppTheme.Status.errorColor)
             case .invalidConfiguration(.insecureURL(let url)):
                 status(L10n.string("\(url) must use HTTPS, or HTTP on this Mac only."), color: AppTheme.Status.errorColor)
+            case .invalidConfiguration(.builtInNotRunning):
+                EmptyView()
             case .tokenNotSaved:
                 status(L10n.string("Couldn't save the token to the Keychain."), color: AppTheme.Status.errorColor)
             case .failed(let message):
@@ -174,7 +258,7 @@ struct BackendPane: View {
     }
 }
 
-private extension View {
+extension View {
     func fieldChrome() -> some View {
         font(.system(size: AppTheme.FontSize.sm, design: .monospaced))
             .foregroundStyle(AppTheme.Text.primaryColor)

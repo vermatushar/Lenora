@@ -26,19 +26,22 @@ final class BackendConnection {
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let loadToken: @Sendable () async -> String?
     @ObservationIgnored private let makeProvider: @MainActor (LenoraBackendConfiguration) -> any GenerationProvider
+    @ObservationIgnored private let builtInConfiguration: @MainActor () -> LenoraBackendConfiguration?
 
     init(
         catalog: ModelCatalog = .shared,
         environment: [String: String] = ProcessInfo.processInfo.environment,
         defaults: UserDefaults = .standard,
         loadToken: @escaping @Sendable () async -> String? = { await BackendConnection.loadStoredToken() },
-        makeProvider: @escaping @MainActor (LenoraBackendConfiguration) -> any GenerationProvider = { LenoraBackendClient(configuration: $0) }
+        makeProvider: @escaping @MainActor (LenoraBackendConfiguration) -> any GenerationProvider = { LenoraBackendClient(configuration: $0) },
+        builtInConfiguration: @escaping @MainActor () -> LenoraBackendConfiguration? = { BuiltInBackend.shared.configuration }
     ) {
         self.catalog = catalog
         self.environment = environment
         self.defaults = defaults
         self.loadToken = loadToken
         self.makeProvider = makeProvider
+        self.builtInConfiguration = builtInConfiguration
     }
 
     func reload(recheckAddons: Bool = false) async {
@@ -49,7 +52,9 @@ final class BackendConnection {
             environment: environment,
             storedURL: defaults.string(forKey: LenoraBackendConfiguration.urlDefaultsKey),
             plistURL: Bundle.main.object(forInfoDictionaryKey: "LenoraBackendURL") as? String,
-            keychainToken: await loadToken()
+            keychainToken: await loadToken(),
+            mode: BackendMode.effective(environment: environment, defaults: defaults),
+            builtIn: builtInConfiguration()
         )
         guard current == generation else { return }
         urlFromEnvironment = LenoraBackendConfiguration.environmentURL(sources.environment) != nil

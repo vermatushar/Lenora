@@ -32,6 +32,10 @@ uv run lenora-backend          # reads ../.env in development
 
 An adapter with missing settings is disabled. `GET /v1/health` (with the token) shows why.
 
+- `LENORA_PORT=0` binds an OS-assigned port. The backend prints `LENORA_READY port=<n>` to stdout once startup finishes; logs go to stderr.
+- `LENORA_PARENT_PID` makes the backend shut down when that process exits. The app sets it for its built-in backend.
+- Only one backend may use a data directory; a second exits with code 3.
+
 Stored results (OpenAI voiceovers and rewrites) are served from `/v1/results/{id}` on the backend's own origin and expire after 24 hours.
 
 ## Deploy

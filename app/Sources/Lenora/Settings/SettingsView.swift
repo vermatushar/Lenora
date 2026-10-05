@@ -4,6 +4,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     case general
     case appearance
     case models
+    case apiKeys
     case agent
     case backend
     case skills
@@ -16,6 +17,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .general: return L10n.key("General")
         case .appearance: return L10n.key("Appearance")
         case .models: return L10n.key("Models")
+        case .apiKeys: return L10n.key("API Keys")
         case .agent: return "Agent"
         case .backend: return L10n.key("Backend")
         case .skills: return L10n.key("Skills")
@@ -28,6 +30,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .general: return "gearshape"
         case .appearance: return "sun.max"
         case .models: return "square.stack.3d.up"
+        case .apiKeys: return "key"
         case .agent: return "paperplane"
         case .backend: return "server.rack"
         case .skills: return "book.closed"
@@ -120,6 +123,8 @@ private struct SettingsDetail: View {
                                 AppearancePane()
                             case .models:
                                 ModelsPane()
+                            case .apiKeys:
+                                APIKeysPane()
                             case .agent:
                                 AgentPane()
                             case .backend:

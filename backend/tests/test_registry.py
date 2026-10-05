@@ -75,3 +75,15 @@ def test_shutdown_stops_each_adapter_once():
     with TestClient(build_app(adapter)):
         assert adapter.stopped == 0
     assert adapter.stopped == 1
+
+
+def test_disabled_reason_names_fields_without_values(monkeypatch):
+    import httpx as _httpx
+    monkeypatch.setenv("LENORA_CLOUDINARY_CLOUD_NAME", "bad name!")
+    monkeypatch.setenv("LENORA_CLOUDINARY_API_KEY", "123456789012345")
+    monkeypatch.setenv("LENORA_CLOUDINARY_API_SECRET", "s3cr3t-value")
+    monkeypatch.setenv("LENORA_OPENAI_API_KEY", "")
+    registry = Registry.load(_httpx.AsyncClient())
+    reasons = " ".join(s.reason or "" for s in registry.statuses)
+    assert "LENORA_CLOUDINARY_CLOUD_NAME" in reasons
+    assert "bad name!" not in reasons and "s3cr3t-value" not in reasons and "123456789012345" not in reasons

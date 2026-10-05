@@ -89,6 +89,16 @@ struct GenerationServiceProviderTests {
         try await fixture.waitUntil { placeholder.generationStatus == .failed("Resource not found") }
     }
 
+    @Test func notFoundDuringPollFailsWithRestartMessage() async throws {
+        let fixture = try await EditorTestFixture.withImage()
+        defer { fixture.cleanup() }
+        let catalog = try cloudinaryCatalog()
+        let notFound = BackendError.problem(BackendProblem(code: "not_found", detail: "Unknown job.", status: 404, retryable: false))
+        let service = GenerationService(provider: { FakeProvider(failure: notFound) }, catalog: catalog)
+        let placeholder = try placeholder(start(service, editor: fixture.editor, source: fixture.image), in: fixture.editor)
+        try await fixture.waitUntil { placeholder.generationStatus == .failed("The backend restarted. Generate again.") }
+    }
+
     @Test func succeededJobLandsResultInProject() async throws {
         let fixture = try await EditorTestFixture.withImage()
         defer { fixture.cleanup() }
@@ -382,6 +392,45 @@ struct GenerationResumeTests {
         #expect(await provider.pollers == 0)
     }
 
+    @Test func resumeAfterBackendRestartPollsTheNewBackend() async throws {
+        let fixture = try await EditorTestFixture.withImage()
+        defer { fixture.cleanup() }
+        let result = JobResult(url: fixture.servedImageURL, contentType: "image/png", fileExtension: "png")
+        let (placeholder, stale) = try await restartBackendDuringPolling(
+            fixture, restarted: FakeProvider(states: [jobState(.succeeded, results: [result])])
+        )
+        try await fixture.waitUntil { fixture.isFinalized(placeholder) }
+        try await fixture.waitUntil { await stale.terminations == 1 }
+    }
+
+    @Test func resumeAfterBackendRestartReportsAForgottenJob() async throws {
+        let fixture = try await EditorTestFixture.withImage()
+        defer { fixture.cleanup() }
+        let notFound = BackendError.problem(BackendProblem(code: "not_found", detail: "Unknown job.", status: 404, retryable: false))
+        let (placeholder, _) = try await restartBackendDuringPolling(fixture, restarted: FakeProvider(failure: notFound))
+        try await fixture.waitUntil { placeholder.generationStatus == .failed("The backend restarted. Generate again.") }
+    }
+
+    private func restartBackendDuringPolling(
+        _ fixture: EditorTestFixture, restarted: FakeProvider
+    ) async throws -> (MediaAsset, FakeProvider) {
+        let stale = FakeProvider(states: [jobState(.running)])
+        let current = ProviderSlot(stale)
+        let service = GenerationService(provider: { current.provider }, catalog: try cloudinaryCatalog())
+        var input = GenerationInput(prompt: "", model: "cloudinary/background-removal", duration: 0, aspectRatio: "")
+        input.createdAt = Date()
+        let id = service.generate(
+            genInput: input, assetType: .image, placeholderDuration: 0, references: [fixture.image],
+            name: "Remove Background", buildParams: { _ in .removeBackground },
+            fileExtension: "png", projectURL: fixture.editor.projectURL, editor: fixture.editor
+        )
+        let placeholder = try #require(fixture.editor.mediaAssets.first { $0.id == id })
+        try await stale.waitForPoller()
+        current.provider = restarted
+        service.resumePendingGenerations(editor: fixture.editor)
+        return (placeholder, stale)
+    }
+
     @Test func resumeWithoutBackendLeavesJobPending() async throws {
         let fixture = try await EditorTestFixture.withImage()
         defer { fixture.cleanup() }
@@ -391,6 +440,12 @@ struct GenerationResumeTests {
         #expect(service.monitoredJobIds.isEmpty)
         #expect(placeholder.generationStatus == .generating)
     }
+}
+
+@MainActor
+private final class ProviderSlot {
+    var provider: FakeProvider
+    init(_ provider: FakeProvider) { self.provider = provider }
 }
 
 private actor Gate {

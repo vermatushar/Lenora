@@ -1,6 +1,6 @@
 # Contributing
 
-Set up with `./scripts/bootstrap`, then run `./scripts/dev`; see the [README](README.md#quick-start). Participation is governed by the [Code of Conduct](CODE_OF_CONDUCT.md).
+Set up with `./scripts/bootstrap`, then run `./scripts/dev`; see the [README](README.md#quick-start). The built-in backend ships only in release builds (`scripts/bundle.sh release`); in development, `./scripts/dev` runs `backend/` and connects the app to it. Participation is governed by the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Layout
 - `app/` — Swift 6.2 editor. Read `app/AGENTS.md` before changing it: no main-thread file I/O, one undo step per user intent, `AppTheme` tokens, `L10n` copy, MCP end-to-end checks for tool changes.

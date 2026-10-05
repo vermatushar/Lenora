@@ -13,12 +13,14 @@ class CoreSettings(BaseSettings):
     env: Literal["development", "production"] = "development"
     token: SecretStr = Field(min_length=32)
     host: str | None = None
-    port: int | None = Field(default=None, validation_alias=AliasChoices("LENORA_PORT", "PORT"))
+    port: int | None = Field(default=None, ge=0, le=65535, validation_alias=AliasChoices("LENORA_PORT", "PORT"))
     provider_timeout_seconds: float = Field(default=60.0, gt=0)
     # Shared with adapters that read LENORA_DATA_DIR themselves; results live in <data_dir>/results.
     data_dir: Path = Path(".data")
     # Proxies whose X-Forwarded-Proto uvicorn trusts in production; result URLs use the client-facing scheme.
     forwarded_allow_ips: str | None = None
+    # Set by the app for its built-in backend; the backend exits when that process is gone.
+    parent_pid: int | None = Field(default=None, gt=1)
 
     @property
     def bind_host(self) -> str:
