@@ -158,6 +158,8 @@ struct BackendPane: View {
                 status(L10n.string("\(url) is not a valid URL."), color: AppTheme.Status.errorColor)
             case .invalidConfiguration(.insecureURL(let url)):
                 status(L10n.string("\(url) must use HTTPS, or HTTP on this Mac only."), color: AppTheme.Status.errorColor)
+            case .invalidConfiguration(.builtInNotRunning):
+                EmptyView()
             case .tokenNotSaved:
                 status(L10n.string("Couldn't save the token to the Keychain."), color: AppTheme.Status.errorColor)
             case .failed(let message):

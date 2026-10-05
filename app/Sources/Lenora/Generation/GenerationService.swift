@@ -596,6 +596,12 @@ final class GenerationService {
             return
         } catch let error as BackendError where error.isTransient || error == .unauthorized {
             Log.generation.warning("job \(jobId) polling paused: \(error.localizedDescription)")
+        } catch BackendError.problem(let problem) where problem.code == "not_found" {
+            Log.generation.error("job \(jobId) is unknown to the backend")
+            let message = L10n.string("The backend restarted. Generate again.")
+            placeholders.forEach { updateGenerationMetadata($0, editor: editor, status: .failed(message)) }
+            editor.onProjectCheckpointRequired?()
+            onFailure?()
         } catch {
             Log.generation.error("job \(jobId) polling failed: \(error.localizedDescription)")
             placeholders.forEach { updateGenerationMetadata($0, editor: editor, status: .failed(error.localizedDescription)) }

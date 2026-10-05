@@ -100,6 +100,8 @@ actor BuiltInBackendSupervisor {
 
     func currentPID() -> Int32? { runningPID.withLock { $0 } }
 
+    func currentState() -> BuiltInBackendState { state }
+
     /// Runs lifecycle operations one at a time, in call order.
     @discardableResult
     private func enqueue(_ operation: @escaping @Sendable (isolated BuiltInBackendSupervisor) async -> Void) -> Task<Void, Never> {

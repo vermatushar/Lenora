@@ -74,4 +74,34 @@ struct LenoraBackendConfigurationTests {
     func acceptsSecureOrLoopbackURLs(url: String) throws {
         _ = try Config.resolve(.init(environment: [:], storedURL: url, plistURL: nil, keychainToken: nil))
     }
+
+    @Test func builtInModeUsesTheSupervisorConfiguration() throws {
+        let builtIn = Config(baseURL: URL(string: "http://127.0.0.1:54817")!, token: "tok")
+        let sources = Config.Sources(environment: [:], storedURL: "https://custom.example",
+                                     plistURL: nil, keychainToken: "k", mode: .builtIn, builtIn: builtIn)
+        #expect(try Config.resolve(sources).configuration == builtIn)
+    }
+
+    @Test func builtInModeBeforeReadyIsNotRunning() {
+        let sources = Config.Sources(environment: [:], storedURL: nil, plistURL: nil,
+                                     keychainToken: nil, mode: .builtIn, builtIn: nil)
+        #expect(throws: BackendConfigurationError.builtInNotRunning) { try Config.resolve(sources) }
+    }
+
+    @Test func environmentURLOverridesBuiltInMode() throws {
+        let sources = Config.Sources(environment: ["LENORA_BACKEND_URL": "http://127.0.0.1:8787"],
+                                     storedURL: nil, plistURL: nil, keychainToken: nil, mode: .builtIn, builtIn: nil)
+        #expect(try Config.resolve(sources).configuration.baseURL.absoluteString == "http://127.0.0.1:8787")
+    }
+
+    @Test func modeDefaultsToBuiltInAndEnvironmentForcesCustom() throws {
+        let suite = "BackendMode-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        #expect(BackendMode.effective(environment: [:], defaults: defaults) == .builtIn)
+        defaults.set("custom", forKey: BackendMode.defaultsKey)
+        #expect(BackendMode.effective(environment: [:], defaults: defaults) == .custom)
+        defaults.set("builtIn", forKey: BackendMode.defaultsKey)
+        #expect(BackendMode.effective(environment: ["LENORA_BACKEND_URL": "http://127.0.0.1:1"], defaults: defaults) == .custom)
+    }
 }

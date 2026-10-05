@@ -25,6 +25,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AppNotifications.configure()
 
         AppState.shared.startMCPService()
+        BuiltInBackend.shared.startIfSelected()
 
         // Pre-warm NSOpenPanel to avoid main thread blocking during cold start.
         Task { @MainActor [weak self] in
@@ -43,6 +44,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             AppState.shared.showHome()
         }
         return true
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        BuiltInBackend.shared.terminateForQuit()
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {

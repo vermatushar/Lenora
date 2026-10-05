@@ -89,6 +89,16 @@ struct GenerationServiceProviderTests {
         try await fixture.waitUntil { placeholder.generationStatus == .failed("Resource not found") }
     }
 
+    @Test func notFoundDuringPollFailsWithRestartMessage() async throws {
+        let fixture = try await EditorTestFixture.withImage()
+        defer { fixture.cleanup() }
+        let catalog = try cloudinaryCatalog()
+        let notFound = BackendError.problem(BackendProblem(code: "not_found", detail: "Unknown job.", status: 404, retryable: false))
+        let service = GenerationService(provider: { FakeProvider(failure: notFound) }, catalog: catalog)
+        let placeholder = try placeholder(start(service, editor: fixture.editor, source: fixture.image), in: fixture.editor)
+        try await fixture.waitUntil { placeholder.generationStatus == .failed("The backend restarted. Generate again.") }
+    }
+
     @Test func succeededJobLandsResultInProject() async throws {
         let fixture = try await EditorTestFixture.withImage()
         defer { fixture.cleanup() }

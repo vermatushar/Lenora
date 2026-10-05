@@ -20,6 +20,18 @@ struct LenoraBackendConfiguration: Sendable, Equatable {
 enum BackendConfigurationError: Error, Equatable, Sendable {
     case invalidURL(String)
     case insecureURL(String)
+    case builtInNotRunning
+}
+
+enum BackendMode: String, Sendable, CaseIterable {
+    case builtIn, custom
+
+    static let defaultsKey = "xyz.agentage.lenora.backend.mode"
+
+    static func effective(environment: [String: String], defaults: UserDefaults) -> BackendMode {
+        if LenoraBackendConfiguration.environmentURL(environment) != nil { return .custom }
+        return defaults.string(forKey: defaultsKey).flatMap(BackendMode.init(rawValue:)) ?? .builtIn
+    }
 }
 
 extension LenoraBackendConfiguration {
@@ -33,6 +45,8 @@ extension LenoraBackendConfiguration {
         var storedURL: String?
         var plistURL: String?
         var keychainToken: String?
+        var mode: BackendMode = .custom
+        var builtIn: LenoraBackendConfiguration? = nil
     }
 
     static func environmentURL(_ environment: [String: String]) -> String? {
@@ -44,6 +58,10 @@ extension LenoraBackendConfiguration {
     }
 
     static func resolve(_ sources: Sources) throws(BackendConfigurationError) -> (configuration: Self, tokenToPersist: String?) {
+        if environmentURL(sources.environment) == nil, sources.mode == .builtIn {
+            guard let builtIn = sources.builtIn else { throw .builtInNotRunning }
+            return (builtIn, nil)
+        }
         let raw = environmentURL(sources.environment) ?? sources.storedURL ?? sources.plistURL ?? defaultURL
         guard let url = URL(string: raw), let scheme = url.scheme, let host = url.host(percentEncoded: false), !host.isEmpty else {
             throw .invalidURL(raw)

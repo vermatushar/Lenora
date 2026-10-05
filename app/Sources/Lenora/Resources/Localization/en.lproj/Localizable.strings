@@ -900,6 +900,7 @@
 "The MCP server could not start. Check the port, then try again." = "The MCP server could not start. Check the port, then try again.";
 "The MCP token is unavailable. Check Keychain access, then try again." = "The MCP token is unavailable. Check Keychain access, then try again.";
 "The backend rejected the token." = "The backend rejected the token.";
+"The backend restarted. Generate again." = "The backend restarted. Generate again.";
 "The backend returned an unexpected response." = "The backend returned an unexpected response.";
 "The backend returned no result for this output." = "The backend returned no result for this output.";
 "The clip you're adding has different settings than the current project." = "The clip you're adding has different settings than the current project.";
