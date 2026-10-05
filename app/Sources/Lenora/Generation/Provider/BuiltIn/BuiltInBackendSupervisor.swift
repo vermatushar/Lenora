@@ -13,11 +13,11 @@ enum BuiltInBackendFailure: Sendable, Equatable {
         }
     }
 
-    init(exitCode: Int32) {
-        switch exitCode {
-        case 2: self = .configuration
-        case 3: self = .alreadyRunning
-        default: self = .crashed(exitCode)
+    init(status: Int32, reason: Process.TerminationReason) {
+        switch (reason, status) {
+        case (.exit, 2): self = .configuration
+        case (.exit, 3): self = .alreadyRunning
+        default: self = .crashed(status)
         }
     }
 }
@@ -44,14 +44,16 @@ actor BuiltInBackendSupervisor {
     static let backoffSchedule: [Duration] = [.seconds(1), .seconds(2), .seconds(4), .seconds(8), .seconds(16), .seconds(30)]
     static let maxConsecutiveFailures = 5
     static let logCapacity = 100
+    static let stderrDrainGrace: Duration = .seconds(1)
 
-    private enum Event: Sendable { case line(String), exited(Int32), timedOut }
+    private enum Event: Sendable { case line(String), exited(BuiltInBackendFailure), timedOut }
 
     private let dependencies: Dependencies
     private let report: @Sendable (BuiltInBackendState) async -> Void
     private var loop: Task<Void, Never>?
+    private var lifecycle: Task<Void, Never>?
     private var debounceTask: Task<Void, Never>?
-    private var stopping = false
+    private var isActive = false
     private var state: BuiltInBackendState = .stopped
     private let runningPID = Mutex<Int32?>(nil)
 
@@ -61,30 +63,17 @@ actor BuiltInBackendSupervisor {
     }
 
     func start() {
-        guard loop == nil else { return }
-        stopping = false
-        loop = Task { await self.run() }
+        enqueue { $0.launch() }
     }
 
     func stop() async {
         debounceTask?.cancel()
-        guard let loop else { return }
-        stopping = true
-        send(SIGTERM)
-        let escalation = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(5))
-            guard !Task.isCancelled else { return }
-            await self?.send(SIGKILL)
-        }
-        await loop.value
-        escalation.cancel()
-        self.loop = nil
-        await publish(.stopped)
+        await enqueue { await $0.shutDown() }.value
     }
 
     func restart() async {
-        await stop()
-        start()
+        debounceTask?.cancel()
+        await enqueue { await $0.shutDown(); $0.launch() }.value
     }
 
     func keysChanged() {
@@ -92,7 +81,11 @@ actor BuiltInBackendSupervisor {
         let debounce = dependencies.debounce
         debounceTask = Task {
             do { try await debounce() } catch { return }
-            await self.restartIfActive()
+            await self.enqueue { supervisor in
+                guard supervisor.isActive else { return }
+                await supervisor.shutDown()
+                supervisor.launch()
+            }.value
         }
     }
 
@@ -107,9 +100,38 @@ actor BuiltInBackendSupervisor {
 
     func currentPID() -> Int32? { runningPID.withLock { $0 } }
 
-    private func restartIfActive() async {
-        guard loop != nil else { return }
-        await restart()
+    /// Runs lifecycle operations one at a time, in call order.
+    @discardableResult
+    private func enqueue(_ operation: @escaping @Sendable (isolated BuiltInBackendSupervisor) async -> Void) -> Task<Void, Never> {
+        let previous = lifecycle
+        let task = Task { await previous?.value; await operation(self) }
+        lifecycle = task
+        return task
+    }
+
+    private func launch() {
+        isActive = true
+        guard loop == nil else { return }
+        loop = Task { await self.run() }
+    }
+
+    private func shutDown() async {
+        isActive = false
+        guard let loop else {
+            if state != .stopped { await publish(.stopped) }
+            return
+        }
+        loop.cancel()
+        send(SIGTERM)
+        let escalation = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(5))
+            guard !Task.isCancelled else { return }
+            await self?.send(SIGKILL)
+        }
+        await loop.value
+        escalation.cancel()
+        self.loop = nil
+        await publish(.stopped)
     }
 
     private func send(_ signal: Int32) {
@@ -123,22 +145,27 @@ actor BuiltInBackendSupervisor {
 
     private func run() async {
         var failures = 0
-        while !stopping {
-            guard let runtime = dependencies.runtimeDirectory() else {
-                await publish(.notIncluded)
-                return
-            }
-            let (failure, log, reachedRunning) = await runOnce(runtime: runtime)
-            if stopping { return }
+        while isActive {
+            guard let runtime = dependencies.runtimeDirectory() else { return await finish(.notIncluded) }
+            // Shielded from the loop's cancellation so the child is always reaped before returning.
+            let (failure, log, reachedRunning) = await Task { await self.runOnce(runtime: runtime) }.value
+            guard isActive else { return }
             if reachedRunning { failures = 0 }
-            await publish(.failed(failure, log: log))
-            guard failure.isRetryable else { return }
             failures += 1
-            guard failures < Self.maxConsecutiveFailures else { return }
+            guard failure.isRetryable, failures < Self.maxConsecutiveFailures else {
+                return await finish(.failed(failure, log: log))
+            }
+            await publish(.failed(failure, log: log))
             do {
                 try await dependencies.backoff(Self.backoffSchedule[min(failures, Self.backoffSchedule.count) - 1])
             } catch { return }
         }
+    }
+
+    /// Ends a run that stopped by itself, so a later `start()` relaunches.
+    private func finish(_ final: BuiltInBackendState) async {
+        loop = nil
+        await publish(final)
     }
 
     private func runOnce(runtime: URL) async -> (BuiltInBackendFailure, [String], Bool) {
@@ -160,7 +187,7 @@ actor BuiltInBackendSupervisor {
         process.standardError = stderr
         process.standardInput = FileHandle.nullDevice
         let (events, sink) = AsyncStream<Event>.makeStream()
-        process.terminationHandler = { sink.yield(.exited($0.terminationStatus)) }
+        process.terminationHandler = { sink.yield(.exited(BuiltInBackendFailure(status: $0.terminationStatus, reason: $0.terminationReason))) }
 
         await publish(.starting)
         do {
@@ -170,6 +197,7 @@ actor BuiltInBackendSupervisor {
         }
         runningPID.withLock { $0 = process.processIdentifier }
         defer { runningPID.withLock { $0 = nil } }
+        if !isActive { send(SIGTERM) }
 
         let stdoutLines = PipeLines(stdout.fileHandleForReading), stderrLines = PipeLines(stderr.fileHandleForReading)
         let stdoutReader = Task.detached {
@@ -209,14 +237,25 @@ actor BuiltInBackendSupervisor {
             case .timedOut where failure == nil && !reachedRunning:
                 failure = .timeout
                 send(SIGKILL)
-            case .exited(let code):
-                _ = await stderrReader.result
-                return (failure ?? BuiltInBackendFailure(exitCode: code), log.snapshot(), reachedRunning)
+            case .exited(let exitFailure):
+                await Self.drain(stderrReader, within: Self.stderrDrainGrace)
+                return (failure ?? exitFailure, log.snapshot(), reachedRunning)
             default:
                 continue
             }
         }
         return (.internal, log.snapshot(), reachedRunning)
+    }
+
+    /// A grandchild can keep stderr open after the child exits.
+    private static func drain(_ reader: Task<Void, Never>, within grace: Duration) async {
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { await reader.value }
+            group.addTask { try? await Task.sleep(for: grace) }
+            await group.next()
+            reader.cancel()
+            group.cancelAll()
+        }
     }
 
     @concurrent private static func createDirectory(_ url: URL) async throws {

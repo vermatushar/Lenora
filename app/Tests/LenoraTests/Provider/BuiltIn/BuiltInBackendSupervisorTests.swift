@@ -35,6 +35,7 @@ final class BuiltInBackendSupervisorTests {
         private var pending: [Int: CheckedContinuation<Void, Error>] = [:]
         private var nextID = 0
         private(set) var completed = 0
+        var waitingCount: Int { pending.count }
 
         func wait() async throws {
             let id = nextID
@@ -68,7 +69,8 @@ final class BuiltInBackendSupervisorTests {
     private func supervisor(
         script: String?, recorder: Recorder, probe: Bool = true,
         readyTimeout: @escaping @Sendable () async -> Void = { try? await Task.sleep(for: .seconds(3600)) },
-        debounce: @escaping @Sendable () async throws -> Void = {}
+        debounce: @escaping @Sendable () async throws -> Void = {},
+        backoff: (@Sendable (Duration) async throws -> Void)? = nil
     ) throws -> BuiltInBackendSupervisor {
         let runtime = try script.map { try self.runtime(script: $0) }
         let dependencies = BuiltInBackendSupervisor.Dependencies(
@@ -77,7 +79,7 @@ final class BuiltInBackendSupervisorTests {
             loadKeys: { ProviderKeys() },
             probe: { _ in probe },
             readyTimeout: readyTimeout,
-            backoff: { await recorder.recordBackoff($0) },
+            backoff: backoff ?? { await recorder.recordBackoff($0) },
             debounce: debounce,
             parentPID: getpid(),
             baseEnvironment: [:]
@@ -87,6 +89,14 @@ final class BuiltInBackendSupervisorTests {
 
     private static func isRunning(_ state: BuiltInBackendState) -> Bool {
         if case .running = state { true } else { false }
+    }
+
+    private static func isFailed(_ state: BuiltInBackendState) -> Bool {
+        if case .failed = state { true } else { false }
+    }
+
+    private static func isAlreadyRunning(_ state: BuiltInBackendState?) -> Bool {
+        if case .failed(.alreadyRunning, _) = state { true } else { false }
     }
 
     @Test func readyLineMakesItRunningOnThatPort() async throws {
@@ -179,6 +189,89 @@ final class BuiltInBackendSupervisorTests {
         while !(await gate.releaseSoleWaiter(afterWaits: 3)) { await Task.yield() }
         await recorder.waitUntil { $0.filter(Self.isRunning).count == 2 }
         #expect(await gate.completed == 1)
+        await sut.stop()
+    }
+
+    @Test func overlappingRestartsLeaveOneStoppableChild() async throws {
+        let recorder = Recorder()
+        let pids = root.appending(path: "pids").path(percentEncoded: false)
+        let terminating = root.appending(path: "terminating").path(percentEncoded: false)
+        let release = root.appending(path: "release").path(percentEncoded: false)
+        let script = """
+        echo $$ >> '\(pids)'
+        trap 'touch "\(terminating)"; while [ ! -e "\(release)" ]; do sleep 0.01; done; kill $!; exit 0' TERM
+        echo 'LENORA_READY port=4567'
+        sleep 3600 & wait
+        """
+        let sut = try supervisor(script: script, recorder: recorder)
+        await sut.start()
+        await recorder.waitUntil { $0.contains(where: Self.isRunning) }
+        let restarts = Task {
+            async let first: Void = sut.restart()
+            async let second: Void = sut.restart()
+            _ = await (first, second)
+        }
+        while !FileManager.default.fileExists(atPath: terminating) { await Task.yield() }
+        FileManager.default.createFile(atPath: release, contents: nil)
+        await restarts.value
+        await recorder.waitUntil { $0.last.map(Self.isRunning) ?? false }
+        let launched = try String(contentsOfFile: pids, encoding: .utf8).split(separator: "\n").compactMap { Int32($0) }
+        let live = launched.filter { kill($0, 0) == 0 }
+        #expect(live.count == 1)
+        #expect(live.first == (await sut.currentPID()))
+        await sut.stop()
+        #expect(launched.allSatisfy { kill($0, 0) == -1 })
+    }
+
+    @Test func stopDoesNotWaitOutTheBackoff() async throws {
+        let recorder = Recorder()
+        let gate = Gate()
+        let sut = try supervisor(script: "exit 1", recorder: recorder, backoff: { _ in try await gate.wait() })
+        await sut.start()
+        while await gate.waitingCount == 0 { await Task.yield() }
+        await sut.stop()
+        #expect(await gate.completed == 0)
+        #expect(await recorder.states.last == .stopped)
+    }
+
+    @Test func exitIsReportedWhileAGrandchildHoldsStderr() async throws {
+        let recorder = Recorder()
+        let grandchild = root.appending(path: "grandchild")
+        let sut = try supervisor(script: "sleep 3600 & echo $! > '\(grandchild.path(percentEncoded: false))'; exit 3", recorder: recorder)
+        await sut.start()
+        await recorder.waitUntil { Self.isAlreadyRunning($0.last) }
+        let pid = try #require(Int32(String(contentsOf: grandchild, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)))
+        kill(pid, SIGKILL)
+        await sut.stop()
+    }
+
+    @Test func signalDeathIsARetryableCrash() async throws {
+        let recorder = Recorder()
+        let sut = try supervisor(script: "kill -INT $$", recorder: recorder)
+        await sut.start()
+        await recorder.waitUntil { $0.filter(Self.isFailed).count == 2 }
+        await sut.stop()
+        #expect(await recorder.states.first(where: Self.isFailed) == .failed(.crashed(SIGINT), log: []))
+        #expect(await recorder.backoffs.first == .seconds(1))
+    }
+
+    @Test func startRelaunchesAfterATerminalFailure() async throws {
+        let recorder = Recorder()
+        let sut = try supervisor(script: "exit 3", recorder: recorder)
+        await sut.start()
+        await recorder.waitUntil { Self.isAlreadyRunning($0.last) }
+        await sut.start()
+        await recorder.waitUntil { $0.filter { $0 == .starting }.count == 2 }
+        await sut.stop()
+    }
+
+    @Test func keyChangeRelaunchesAfterAConfigurationFailure() async throws {
+        let recorder = Recorder()
+        let sut = try supervisor(script: "exit 2", recorder: recorder)
+        await sut.start()
+        await recorder.waitUntil { if case .failed(.configuration, _) = $0.last { true } else { false } }
+        await sut.keysChanged()
+        await recorder.waitUntil { $0.filter { $0 == .starting }.count == 2 }
         await sut.stop()
     }
 }
