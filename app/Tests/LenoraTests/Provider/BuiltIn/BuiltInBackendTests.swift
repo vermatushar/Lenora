@@ -8,6 +8,7 @@ struct BuiltInBackendTests {
         runtimeDirectory: { nil },
         dataDirectory: FileManager.default.temporaryDirectory.appending(path: "BuiltInBackendTests-\(UUID().uuidString)"),
         loadKeys: { ProviderKeys() },
+        isQuarantined: { _ in false },
         probe: { _ in false },
         readyTimeout: {},
         backoff: { _ in },

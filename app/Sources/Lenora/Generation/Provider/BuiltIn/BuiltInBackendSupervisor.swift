@@ -3,12 +3,12 @@ import Security
 import Synchronization
 
 enum BuiltInBackendFailure: Sendable, Equatable {
-    case timeout, protocolViolation, alreadyRunning, configuration, `internal`
+    case timeout, protocolViolation, alreadyRunning, configuration, quarantined, `internal`
     case crashed(Int32)
 
     var isRetryable: Bool {
         switch self {
-        case .alreadyRunning, .configuration: false
+        case .alreadyRunning, .configuration, .quarantined: false
         case .timeout, .protocolViolation, .internal, .crashed: true
         }
     }
@@ -33,6 +33,7 @@ actor BuiltInBackendSupervisor {
         var runtimeDirectory: @Sendable () -> URL?
         var dataDirectory: URL
         var loadKeys: @Sendable () -> ProviderKeys
+        var isQuarantined: @Sendable (URL) async -> Bool
         var probe: @Sendable (LenoraBackendConfiguration) async -> Bool
         var readyTimeout: @Sendable () async -> Void
         var backoff: @Sendable (Duration) async throws -> Void
@@ -172,6 +173,9 @@ actor BuiltInBackendSupervisor {
 
     private func runOnce(runtime: URL) async -> (BuiltInBackendFailure, [String], Bool) {
         let log = LogBuffer(capacity: Self.logCapacity)
+        let executable = runtime.appending(path: "python/bin/python3")
+        // Gatekeeper kills a quarantined interpreter with SIGKILL, which looks like a crash.
+        if await dependencies.isQuarantined(executable) { return (.quarantined, [], false) }
         do {
             try await Self.createDirectory(dependencies.dataDirectory)
         } catch {
@@ -179,7 +183,7 @@ actor BuiltInBackendSupervisor {
         }
         guard let token = Self.makeToken() else { return (.internal, ["Could not create a launch token."], false) }
         let process = Process()
-        process.executableURL = runtime.appending(path: "python/bin/python3")
+        process.executableURL = executable
         process.arguments = ["-I", "-B", "-m", "lenora_backend"]
         process.environment = BuiltInBackendEnvironment.make(
             keys: dependencies.loadKeys(), token: token, dataDirectory: dependencies.dataDirectory,
@@ -264,6 +268,10 @@ actor BuiltInBackendSupervisor {
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
     }
 
+    @concurrent static func isQuarantined(_ executable: URL) async -> Bool {
+        getxattr(executable.path(percentEncoded: false), "com.apple.quarantine", nil, 0, 0, 0) >= 0
+    }
+
     private static func makeToken() -> String? {
         var bytes = [UInt8](repeating: 0, count: 32)
         guard SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes) == errSecSuccess else { return nil }
@@ -332,6 +340,7 @@ extension BuiltInBackendSupervisor.Dependencies {
             runtimeDirectory: { BundledResource.url("Backend") },
             dataDirectory: support,
             loadKeys: { ProviderKeys.load(from: .current) },
+            isQuarantined: { await BuiltInBackendSupervisor.isQuarantined($0) },
             probe: { configuration in
                 (try? await LenoraBackendClient(configuration: configuration).health(recheckAddons: false)) != nil
             },

@@ -30,6 +30,11 @@ final class BuiltInBackendSupervisorTests {
         }
     }
 
+    private actor QuarantineFlag {
+        private(set) var isSet = true
+        func clear() { isSet = false }
+    }
+
     /// Each `wait()` gets its own id, so cancelling an earlier wait never resumes a later one.
     private actor Gate {
         private var pending: [Int: CheckedContinuation<Void, Error>] = [:]
@@ -70,13 +75,15 @@ final class BuiltInBackendSupervisorTests {
         script: String?, recorder: Recorder, probe: Bool = true,
         readyTimeout: @escaping @Sendable () async -> Void = { try? await Task.sleep(for: .seconds(3600)) },
         debounce: @escaping @Sendable () async throws -> Void = {},
-        backoff: (@Sendable (Duration) async throws -> Void)? = nil
+        backoff: (@Sendable (Duration) async throws -> Void)? = nil,
+        isQuarantined: @escaping @Sendable (URL) async -> Bool = { _ in false }
     ) throws -> BuiltInBackendSupervisor {
         let runtime = try script.map { try self.runtime(script: $0) }
         let dependencies = BuiltInBackendSupervisor.Dependencies(
             runtimeDirectory: { runtime },
             dataDirectory: root.appending(path: "data"),
             loadKeys: { ProviderKeys() },
+            isQuarantined: isQuarantined,
             probe: { _ in probe },
             readyTimeout: readyTimeout,
             backoff: backoff ?? { await recorder.recordBackoff($0) },
@@ -263,6 +270,35 @@ final class BuiltInBackendSupervisorTests {
         await sut.start()
         await recorder.waitUntil { $0.filter { $0 == .starting }.count == 2 }
         await sut.stop()
+    }
+
+    @Test func quarantinedInterpreterFailsWithoutLaunching() async throws {
+        let recorder = Recorder()
+        let quarantined = QuarantineFlag()
+        let marker = root.appending(path: "launched")
+        let sut = try supervisor(
+            script: "touch '\(marker.path(percentEncoded: false))'; exit 3", recorder: recorder,
+            isQuarantined: { _ in await quarantined.isSet }
+        )
+        await sut.start()
+        await recorder.waitUntil { if case .failed(.quarantined, _) = $0.last { true } else { false } }
+        #expect(!(await recorder.states.contains(.starting)))
+        #expect(await recorder.backoffs.isEmpty)
+        #expect(!FileManager.default.fileExists(atPath: marker.path(percentEncoded: false)))
+
+        await quarantined.clear()
+        await sut.start()
+        await recorder.waitUntil { Self.isAlreadyRunning($0.last) }
+        #expect(FileManager.default.fileExists(atPath: marker.path(percentEncoded: false)))
+        await sut.stop()
+    }
+
+    @Test func quarantineCheckReadsTheExtendedAttribute() async throws {
+        let python = try runtime(script: "exit 0").appending(path: "python/bin/python3")
+        #expect(!(await BuiltInBackendSupervisor.isQuarantined(python)))
+        let flag = "0081;00000000;Safari;"
+        #expect(setxattr(python.path(percentEncoded: false), "com.apple.quarantine", flag, flag.utf8.count, 0, 0) == 0)
+        #expect(await BuiltInBackendSupervisor.isQuarantined(python))
     }
 
     @Test func keyChangeRelaunchesAfterAConfigurationFailure() async throws {

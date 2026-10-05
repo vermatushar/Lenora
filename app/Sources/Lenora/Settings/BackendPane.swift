@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct BackendPane: View {
+    private static let clearQuarantineCommand = "xattr -dr com.apple.quarantine /Applications/Lenora.app"
     private let connection = BackendConnection.shared
     @State private var urlText = ""
     @State private var tokenText = ""
@@ -56,6 +57,12 @@ struct BackendPane: View {
                         .controlSize(.large)
                     status(failureMessage(failure), color: AppTheme.Status.errorColor)
                 }
+                if failure == .quarantined {
+                    Text(verbatim: Self.clearQuarantineCommand)
+                        .font(.system(size: AppTheme.FontSize.sm, design: .monospaced))
+                        .foregroundStyle(AppTheme.Text.primaryColor)
+                        .textSelection(.enabled)
+                }
                 DisclosureGroup(L10n.string("Log")) {
                     Text(verbatim: log.joined(separator: "\n"))
                         .font(.system(size: AppTheme.FontSize.xs, design: .monospaced))
@@ -74,6 +81,7 @@ struct BackendPane: View {
         case .protocolViolation, .internal: L10n.string("The built-in backend stopped responding.")
         case .alreadyRunning: L10n.string("Another copy of Lenora is using the built-in backend.")
         case .configuration: L10n.string("The built-in backend rejected its settings.")
+        case .quarantined: L10n.string("macOS blocked the built-in backend. In Terminal, run \(Self.clearQuarantineCommand), then choose Restart.")
         case .crashed(let code): L10n.string("The built-in backend quit (code \(Int(code))).")
         }
     }

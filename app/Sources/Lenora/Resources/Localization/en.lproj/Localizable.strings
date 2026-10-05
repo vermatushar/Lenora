@@ -1100,6 +1100,7 @@
 "error" = "error";
 "group moved right to fit" = "group moved right to fit";
 "lowercase" = "lowercase";
+"macOS blocked the built-in backend. In Terminal, run %@, then choose Restart." = "macOS blocked the built-in backend. In Terminal, run %@, then choose Restart.";
 "result" = "result";
 "using Anthropic API key" = "using Anthropic API key";
 "using OpenAI API key" = "using OpenAI API key";

@@ -27,8 +27,8 @@ Download the app as described below, or build it from source.
 
 Requirements: a Mac with Apple silicon on macOS 26, and a free [Cloudinary](https://cloudinary.com/users/register_free) account. An OpenAI key (voiceover, Improve Prompt, agent) and an Anthropic key (agent on Claude) are optional.
 
-1. Download `Lenora.dmg` from the [latest release](https://github.com/vermatushar/Lenora/releases/latest), open it, and drag **Lenora** to **Applications**. Launch it from Applications.
-2. The app is not notarized, so macOS blocks the first launch. Open **System Settings → Privacy & Security**, scroll to Security, and choose **Open Anyway** next to Lenora.
+1. Download `Lenora.dmg` from the [latest release](https://github.com/vermatushar/Lenora/releases/latest), open it, and drag **Lenora** to **Applications**.
+2. The app is not notarized, so remove the quarantine flag macOS added to the download. In Terminal, run `xattr -dr com.apple.quarantine /Applications/Lenora.app`, then open Lenora from Applications. If you already opened Lenora, run the command, then choose **Settings → Backend → Restart**, or reopen Lenora.
 3. Open **Lenora → Settings → API Keys**. In Cloudinary Console → **Settings → API Keys**, copy the **API environment variable** (`cloudinary://…`), paste it into **Paste API environment variable**, choose **Fill**, then **Save**. Add OpenAI or Anthropic keys if you have them.
 4. **Settings → Backend** should say **Running on this Mac**, and list the `cloudinary` adapter as **Enabled**.
 
@@ -42,7 +42,7 @@ Lenora uses your own keys (bring your own key): requests go from your Mac to Clo
 
 Editing, playback, transcription, beat detection and footage search work without any key.
 
-**Troubleshooting:** Saving a key restarts the built-in backend. If it fails to start, Settings → Backend shows why, with its **Log** and a **Restart** button. If macOS still refuses to open the app, run `xattr -dr com.apple.quarantine /Applications/Lenora.app` in Terminal.
+**Troubleshooting:** Saving a Cloudinary or OpenAI key restarts the built-in backend. If it fails to start, Settings → Backend shows why, with its **Log** and a **Restart** button. If Settings → Backend says macOS blocked the built-in backend, run `xattr -dr com.apple.quarantine /Applications/Lenora.app` in Terminal, then choose **Restart**. After you update Lenora, macOS may ask whether Lenora can use its saved keys; choose **Always Allow**.
 
 ## Features
 
